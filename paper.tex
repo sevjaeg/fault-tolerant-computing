@@ -1,0 +1,217 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{nicefrac}  % nicer inline fractions
+\usepackage{tensor}  % allows fancy indices
+\usepackage{siunitx}  % easy handling of value + unit (e.g. \SI{10}{\pF})
+% \sisetup{}  % configure siunitx (e.g. locale = DE)
+\sisetup{output-complex-root=\ensuremath{\mathrm{j}}, complex-root-position = before-number} % configures SI format 10 + j5 for complex numbers (instead of 10 + 5i)
+
+\usepackage{listings}  % code listings
+\usepackage{enumerate}
+\usepackage{booktabs}  % nicer tables (e.g. \toprule)
+\usepackage{verbatim}  % inline code (\verb||)
+\usepackage[european, siunitx, RPvoltages]{circuitikz}  % draw circuit diagrams
+\usepackage{enumitem}
+\setlist[itemize]{label=\rule[0.5ex]{0.6ex}{0.6ex}} % black squares for itemize
+
+\usepackage{graphicx}
+\graphicspath{{./figures/}}
+
+\usepackage{csquotes} % removes biber warning
+\usepackage[  % ieee style citations (e.g. [1])
+	backend     = biber,
+	maxbibnames = 99,
+	autocite    = footnote,
+	style	    = ieee,
+	citestyle   = numeric-comp,
+	doi=false, isbn=false
+]{biblatex}
+\addbibresource{bibliography/bibliography.bib}
+
+\usepackage[nobiblatex]{xurl}  % line breaks in URLs
+% last imports
+\usepackage[bookmarksopen,colorlinks,citecolor=black,linkcolor=black, urlcolor = black]{hyperref}
+
+% after hyperref! 
+\usepackage[noabbrev, nameinlink]{cleveref} 
+% e.g. \cref{label} or \Cref(label) for capital letter
+% configure cleveref not to use brackets around equation references
+\creflabelformat{equation}{#2\textup{#1}#3} % Equation references without parentheses
+
+% add missing hyphenations
+\hyphenation{im-ple-men-ta-tions}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Fault-Tolerant Computing in the Multicore Era\\
+{\normalsize 376.073 System Architectures for Automation and Control, Winter Term 2020}
+\thanks{\today}
+}
+
+\author{\IEEEauthorblockN{Severin Jäger}
+Mat. Nr. 01603004\\
+severin.jaeger@tuwien.ac.at}
+
+
+\maketitle
+
+\begin{abstract}
+Modern cyber-physical systems require computing units featuring both high computational performance and high reliability. Multicore processors allow for applications with high throughput, however they tend to suffer from insufficient dependability for safety-critical applications. This paper reviews the state of the art in reliable computing and investigates both software and hardware approaches for fault-tolerance in the light of increasing computational demands. Furthermore, major application domains and current examples are discussed.
+\end{abstract}
+
+\section{Introduction}
+Today's complex embedded systems such as aircrafts or advanced driver-assistance systems require safe control systems based on reliable hardware. Modern silicon technology enables extremely complex and powerful processor designs, however typical consumer grade CPUs are not suitable for safety-critical systems. Thus, dedicated fault-tolerant computing hardware is required which currently is facing substantial changes as multicore architectures are emerging even in applications with high reliability standards.
+
+
+\subsection{Error Sources in Digital Electronics}
+As technology nodes shrink, the charge held by one transistor is reduced. At the same time, the number of transistors is still following Moore's Law. As a result, the fault rates of modern processors due to cosmic radiation and alpha particles are increasing \cite{Sorin2009}. In addition, process variations and extreme operating conditions of the transistors decrease reliability even further \cite{Gizopoulos2011}. Thus, the dependability of processors is no longer only relevant for deep space applications, but even plays an increasing role in general purpose computing.
+
+Transistor level faults can lead to two sorts of errors: Firstly, there are permanent so-called hard errors like latch-ups witch lead to a persistent divergence of the processor state from its specification. In contrast, soft errors are transient. They are typically known as Single Event Upsets (SEUs) and are considered as a major limit for digital hardware reliability \cite{Iturbe2019}.
+
+\subsection{Fault-Tolerance Approaches}
+One way to tackle the described dependability challenges is fault avoidance. This is typically applied in space applications with high SEU rates where radiation-hardened standard cells are used. However, this is costly and by itself insufficient. This paper deals with the fault-tolerant approach which does not aim at avoiding faults, but at operating correctly in their presence. In particular, the aspect of error detection is covered while recovery, diagnosis, and self-repair are not dealt with in detail.
+
+Classically, dependable CPUs are application-specific designs for the industrial, automotive, aerospace, or space market. They are designed with safety certification in mind and achieve high reliability. However, they are expensive and as they are used mainly for control applications, they offer rather limited computational power.
+
+In contrast, the last 15 years of general-purpose computer architecture were dominated by the rise of multicore processors \cite{Rupp2020}. This has enabled resource-demanding applications like convolutional neural networks (CNNs) even on systems with rather limited computational power. These applications are also interesting for safety-critical systems with notable dependability constraints like autonomous vehicles. As classical reliable computing hardware does not offer excessive multicore capabilities, new techniques are developed. One approach is software-implemented fault tolerance (SIFT) which allows using commercial off-the-shelf (COTS) multicore processors and exploits the inherent redundancy of the parallel cores to reach sufficient reliability levels.
+
+\subsection{Structure of This Paper}
+This paper is structured as follows: In Section~\ref{sec:design_space}, the design space for fault-tolerant processors is briefly discussed. Section~\ref{sec:hardware} covers established hardware approaches and presents some examples while in Section~\ref{sec:software} methods for software-implemented fault tolerance based on standard components are presented. Section~\ref{sec:applications} lists the most significant application domains and refers to interesting designs from the last years. Finally, in Section~\ref{sec:conclusion} the main points are concluded.
+
+
+\section{Design Space for Fault-Tolerant Processors}
+\label{sec:design_space}
+
+All fault-tolerant designs require some form of redundancy. This can be achieved in four domains:
+
+\begin{itemize}
+	\item Space (a functional unit is replicated),
+	\item Time (a computation is executed repeatedly),
+	\item Information (complementary bits), or
+	\item Design (different designs work in parallel) \cite{Sorin2009}.
+\end{itemize}
+
+As redundant designs are very costly, they are only applied in special applications like the Boeing~777 primary flight computer \cite{Yeh1996}. Temporal redundancy is not feasible for high reliability as a single hardware failure can already cause wrong results. Information redundancy is frequently applied in communication and memory systems \cite{Sorin2009}, however it is still unfavourable for processor designs as it tends to slow them down significantly. Thus, all approaches discussed in the following use some sort of spatial redundancy in the sense of multiple execution units working in parallel.
+
+This parallelism can be implemented at different levels:
+\begin{itemize}
+	\item Replication of transistors and metal layers on the process level,
+	\item Duplicated flip-flops on the circuit level,
+	\item Redundant cores and supervisory circuitry on the architectural level, and
+	\item Parallel instructions or threads on the compiler/software level \cite{Iturbe2019}.
+\end{itemize}
+
+While low-level measures significantly improve the processor reliability, they decrease the maximum achievable clock frequency and thus the performance of the chip. Thus higher level measures (i.e. architectural or software) are preferred for high-performance chips.
+
+Any redundancy-based design requires some form of voting or checking unit to determine whether the outputs of the redundant units match. This is simplified by the fact that replica determinism \cite{Poledna2000} is no major problem in the context of CPU design, as the input-output relations for instructions are well-defined.
+
+In the simplest case, two functional units operate in parallel and a checker invalidates the output if the two results diverge. This is called duplication with comparison and allows fault detection \cite{Gizopoulos2011}, however the system can only restart the computation if it detects an error. In case of a permanent fault of one component, the system cannot continue with reliable operation. To achieve fault-tolerant computation in the narrower sense, at least three functional units are required. Typically N-modular redundancy (NMR),  usually with N=3 (TMR),  is used. This architecture uses three replicated execution units and a majority voter. This can tolerate any kind of error in one module and hardly reduces the performance. However, it comes with a significant area and power consumption overhead. Another important limitation is the single point of failure in the voter \cite{Sorin2009}.
+
+
+\section{Hardware Fault Tolerance Techniques}
+\label{sec:hardware}
+
+Currently available processors for safety-critical applications typically feature hardware measures to increase their reliability. Exemplarily, lockstep execution, built-in self-tests and dynamic verification are discussed in this section. Processor cores featuring some of these techniques are available as COTS components. For instance, Arm provides Cortex-R processor cores with dual-core lockstep configuration \cite{Iturbe2019}.
+
+
+\subsection{Lockstep Execution}
+
+A lockstep processor consist of at least two processor cores processing the same instruction stream and a voter or checker comparing the results on a cycle-by-cycle basis. Frequently, a dual-core lockstep setup is used for applications in the industrial or automotive sector as they can achieve IEC~61508 SIL~3 or ISO~26262 ASIL~D certification \cite{Iturbe2019,Han2017}. This approach suffers from a high area overhead ($> \SI{100}{\percent}$), but achieves high levels of fault coverage \cite{Gizopoulos2011}. In special applications like space, triple-core lockstep execution in a TMR configuration can be used due to its fault-tolerant computation capabilities \cite{Iturbe2019}.
+
+One major challenge for lockstep designs is the reduction of common-cause failures. Erroneous behaviour of the clock distribution network, the power supply or the voter can lead to a single point of failure. To avoid this, the two cores are either operated with an offset of a few clock cycles \cite{Iturbe2019} or even connected to independent clock networks \cite{Han2017}. Furthermore, redundant power sources can be used \cite{Han2017}. The single point of failure in the voter and the whole lockstep control logic can be mitigated by using radiation-hardened technology for these parts of the circuit \cite{Iturbe2019}.
+
+\subsection{Built-In Self-Tests}
+
+One rather simple, yet effective technique are built-in self-tests. They require some additional circuitry that performs checks periodically or during idle time and feature a non-redundant way to detect errors. As their area overhead is rather small, they are frequently used in the context of manufacturing testing \cite{Gizopoulos2011}. However, they have to be combined with other measures to reach high levels of reliability.
+
+\subsection{Dynamic Verification}
+
+Dynamic verification is based on additional checker hardware that observes certain invariants that are known to be true under error-free operation. In case of CPU design, these invariants might for instance be related to control flow, data flow or cache coherence. This technique is mainly suitable for complex CPU designs, as the overhead for the additional checks is relatively small compared to large cores \cite{Gizopoulos2011}. Again, this approach is insufficient for safety-critical systems due to its limited fault coverage.
+
+
+\section{Software-Implemented Fault Tolerance with COTS components}
+\label{sec:software}
+
+While general-purpose processors have developed towards powerful multicore systems during the last decade, the aforementioned dependable CPUs are still limited to rather small chips due to their high cost and certification effort. However, several applications like image processing or neural network inference are desirable for critical systems, require relatively high computational power, and benefit from multicore architectures.
+
+Typically, multicore processors do not feature comprehensive hardware fault-tolerance \cite{Villalpando2011}. However, the are implicitly redundant as they consist of several homogeneous cores. This can be exploited in order to increase the overall reliability of the computations performed on the processor by the means of software-implemented fault tolerance. This is attractive as the development of dedicated fault-tolerant processors is several years behind COTS CPU development. Particularly, this is the case for radiation-hardened space components \cite{Nezzari2017}. SIFT is a chance to increase the computational performance in reliability-constrained applications significantly. As emerging applications like machine vision, neural networks or sensor fusion require significant processing resources, there is a demand for this development.
+
+Another advantage of fault handling on the software level is that not all hardware faults have to be treated. As long as they do not alter any state visible for the software, there is in the case of soft errors no need to take action. This reduces the number of faults to be resolved significantly \cite{Walters2011}.
+
+The techniques discussed in this section again deal with spatial redundancy in the sense of software entities operating in parallel. Similar to the aforementioned hardware measures, software reliability techniques can be implemented at different levels. They include
+\begin{itemize}
+	\item Replication of instructions on the compiler level,
+	\item Execution of parallel threads on the operating system or task scheduler level, and
+	\item Redundant applications on the middleware level which is not treated in detail in this paper.
+\end{itemize}
+
+\subsection{Compiler Techniques}
+
+Compiler-based techniques are usually based on NMR redundancy on the instruction level. One well-understood approach is error detection by duplicated instructions (EDDI) \cite{Oh2002}. It is based on redundant CPU registers which hold the results of duplicated instructions. In addition, checker or voting instructions are required to implement NMR. As all those instructions are part of one instruction stream, they are scheduled to one core, thus the redundancy of multicore systems is not utilised. However, EDDI exploits instruction-level parallelism (ILP) well, as it adds many independent instructions. As a result, the runtime overhead is in the order of $10\,\%$ for TMR \cite{Nezzari2017}. However, the code size is increased drastically due to the added instructions.
+
+\subsection{Redundant Multithreading and its Variants}
+
+An higher-level approach for fault detection is the duplication of programs or notable program parts. One opportunity is the replication of processes, however this imposes a significant performance overhead \cite{Walters2011}. Thus, replication on the thread level is the state of the art. The simplest approach is redundant multithreading (RMT) \cite{Mukherjeea2002}. It executes two identical threads and compares their results. The threads are however still scheduled to the same core. The runtime overhead can be reduced significantly on CPUs with simultaneous multithreading (SMT) as the utilisation of the core can be increased by the additional independent threads \cite{Mukherjeea2002}.
+
+In order to utilise multicore processors, SMT has been extended to chip-level redundant threading (CRT). In this case, the threads are no longer executed on the same core, but distributed over the multicore processor. This results in a loose lockstep configuration which outperforms tight lockstep approaches \cite{Mukherjeea2002}.
+
+RMT and CRT can implement different redundancy schemes such as duplication with comparison or TMR while non-replicated threads are processed simultaneously. This flexibility can be exploited by mixed-criticality systems which execute tasks with different real-time and dependability requirements in parallel. In \cite{Bolchini2013}, a self-adaptive approach is presented which applies the most suitable execution mode for each task.
+
+\subsection{Non-Redundant Techniques}
+
+So far, the discussed techniques were based on duplication of software primitives. Similar to the built-in self-tests or dynamic verification covered in Section~\ref{sec:hardware}, non-redundant software routines can be used to improve the reliability of a processor.
+
+One way to do so are control-flow techniques. In contrast to the replication on the instruction level (EDDI), these techniques do not detect faults in the data flow but protect the control flow by means of detecting erroneous branches or jumps \cite{Chielle2016}. To achieve this, the code is split into basic blocks without branches and jumps. So valid jumps have to be at the end of a basic block and to the beginning of a basic block. This requires additional instructions that assign signatures to the basic blocks and checks. The overall runtime overhead is in the order of $55\,\%$ to $85\,\%$ depending on benchmark and algorithm \cite{Chielle2016}.
+
+Furthermore, anomaly detection can be implemented in software. These techniques are usually rather lightweight in terms of performance overhead, but perform rather simple checks and reach only insufficient coverage for operation in safety-critical systems \cite{Gizopoulos2011}.
+
+\subsection{Limits of Software Techniques}
+
+The most obvious bottleneck for software-implemented fault tolerance is the reliability of the underlying hardware. In case only one core is used, almost any hardware fault can result in a single point of failure and even in the case of multicore processors, there are several shared functional units like the I/Os and the power supply. Their failure will cause common-cause faults for all redundant instructions or threads. So especially in the context of ultra-dependable systems like aerospace or space applications, additional hardware measures are required. In general, it has to be concluded that SIFT can never recover all types of errors \cite{Villalpando2011}.
+
+Furthermore, SIFT on multicore processors requires reliable communication between the cores as well as fault isolation \cite{Villalpando2011}. In the case of shared-memory multicore systems, the latter is not trivial as memory faults can affect the redundant threads operating on different cores. For this reason, the memory of dependable systems is usually protected with error-correcting codes in hardware \cite{Nezzari2017}. However, in the case of caches this imposes a significant overhead \cite{Sorin2009}.
+
+\section{Application Domains and Examples}
+\label{sec:applications}
+
+\subsection{Space}
+
+Space applications are traditionally dominated by ultra-reliable radiation-hardened space processors. However, they are extremely expensive and consume much power \cite{Iturbe2019}. Additionally, their development is years behind standard components for safety-critical ground applications. As the computational requirements for space missions increase with better sensors, vision processing and high data rates \cite{Cudmore2019}, multicore systems based on COTS cores are interesting for the space market.
+
+One development is the Arm Triple Core Lock-Step Processor \cite{Iturbe2019} which uses only slightly adapted cores from terrestrial applications in an TMR setup. Only a very small portion of the chip ($<4\,\%$) requires radiation-hardening, thus the processor is both powerful and energy-efficient.
+
+An even more radical approach is the NASA High Performance Spaceflight Computing Platform \cite{Cudmore2019} which features a heterogeneous architecture based on Arm cores. It consist of a Timing, Reset, Config \& Health Controller based on a TMR setup, a Real Time Processing Subsystem with a dual-core lockstep processor and the High Performance Processing Subsystem composed by eight performant cores. In addition to the redundant processors, it uses information redundancy, fault detection on the system software level as well as fault and redundancy management services in the middleware. This setup is sufficient for unmanned missions, however in the context of life control systems on a manned gateway, four of these chips are used in combination with triplicated Time-Triggered Ethernet to construct the Notional Two Fault Tolerant System.
+
+In contrast, satellites in the low earth orbit (LEO) are exposed to less cosmic radiation and can therefore be based on cheaper and less redundant hardware. For these applications, COTS hardware in combination with software-implemented fault tolerance against soft errors and FPGA reconfiguration against hard errors are promising approaches \cite{Fuchs2018}.
+
+\subsection{Aerospace}
+
+The transformation towards COTS components has already taken place in the aerospace market \cite{Athavale2019}. During the last decades, integrated modular avionics architectures have emerged. They require central processing units with notable performance. Multi-core processors can cope with the increasing computational requirements of these units. One major challenge for their adoption in commercial aircrafts is flight safety certification due to the high complexity of these CPUs.
+
+\subsection{Terrestrial Safety-Critical Applications}
+
+In the safety-critical systems market sufficiently reliable COTS processors are state of the art. Frequently, lockstep processors are used, as most industrial systems are fail-safe systems. Still, established dual-core lockstep processors cannot fulfil the requirements of fail-operational systems like autonomous vehicles as their fault-recovery process (i.e. rollback or reset) causes a significant delay and thus potential deadline misses. Due to cost considerations, triplicated hardware is not desirable for many terrestrial applications. Thus, different approaches like the commander/monitor approach \cite{Mehmed2020} are investigated for autonomous driving.
+
+Automotive architectures are highly distributed. This is in principle beneficial for fault tolerance, however fault detection becomes a rather complicated distributed problem. Furthermore, several applications are running on one system on a chip with a hypervisor managing the hardware access. These challenges can be addressed with software solutions \cite{Bijlsma2020}.
+
+However, certain critical control systems in vehicles rely on dedicated dependable hardware like lockstep processors which fulfil the ISO~26262 ASIL~D requirements \cite{Han2017}. As the classical lockstep approach discussed in Section~\ref{sec:hardware} cannot offer the computational power required for convolutional neural networks for autonomous driving, parallel accelerators capable of lockstep operation might be a way to combine high throughput with safety requirements \cite{Matsubara2021}.
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+This paper discussed both hardware and software approaches for fault-tolerant processors in the light of emerging multicore architectures. Most fault-tolerant techniques are based on well-understood redundancy schemes like duplication with comparison or TMR. However, they can be implemented at different levels of the design, ranging from transistors to whole programs being duplicated. Typical hardware redundancy is based on the duplication of cores, usually in a dual-core lockstep configuration. This suffices many common requirements, however modern multicore CPUs offer way more processing power and inherent redundancy. This can be exploited with software-based redundancy which uses redundant threads scheduled to different cores. Unfortunately, the reliability of complex multicore processors is not sufficient for critical applications. As a result, for highly complex applications with significant dependability constraints like spaceflight both approaches are combined in order to create powerful and ultra-dependable computing platforms.
+
+
+\printbibliography
+
+\end{document}
